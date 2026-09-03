@@ -1,0 +1,1 @@
+# Analisador-de-Logs-de-Alta-Performance-com-Pthreads
