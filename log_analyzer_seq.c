@@ -16,6 +16,7 @@ typedef struct{
 
 
 int main() {
+    LogStats stats = {0};
     FILE * p;
     char arquivo[1024];
 
@@ -29,17 +30,16 @@ int main() {
     char metodo[10];
     int status;
     int bytes;
-    int i = 0;
     //Lançar o arquivo no buffer
     while (fgets(arquivo, sizeof(arquivo), p) != NULL){
-        i++;
         sscanf(arquivo, "%s - - %*s %*s \"%s %*[^\"]\" %d %d", ip, metodo, &status, &bytes);
-        printf("%s | %s | %d | %d\n", ip, metodo, status, bytes);
-        if (i == 10) break;
+        stats.total_requests += 1;
+        if(status == 404){stats.total_404++; stats.total_bytes += bytes;}
+        else if(status == 200){stats.total_200++; stats.total_bytes += bytes; }
     }
     
     fclose(p);
-
+    printf("%lld\n", stats.total_requests);
     return 0;
 
 
