@@ -37,17 +37,77 @@ def compila():
             sys.exit(f"Binário não encontrado: {b}")
  
  
-def gera_arquivo(linhas, nome):
-    """Gera o log com semente fixa, se ainda não existir."""
-    caminho = os.path.join(DIR_DADOS, nome)
+BYTES_POR_LINHA = 200   # tamanho médio de uma linha do gerador (~197 bytes)
+ 
+ 
+def _corta_em(caminho, linhas):
+    """Trunca o arquivo para ter exatamente 'linhas' linhas. Devolve quantas havia
+    (se havia menos que o pedido, não mexe e devolve o total)."""
+    contadas = 0
+    pos = 0
+    with open(caminho, "rb") as f:
+        while True:
+            bloco = f.read(1 << 24)
+            if not bloco:
+                return contadas
+            n = bloco.count(b"\n")
+            if contadas + n >= linhas:
+                falta = linhas - contadas
+                idx = -1
+                for _ in range(falta):
+                    idx = bloco.index(b"\n", idx + 1)
+                os.truncate(caminho, pos + idx + 1)
+                return linhas
+            contadas += n
+            pos += len(bloco)
+ 
+ 
+def gera_exato(linhas):
+    """Gera um log com EXATAMENTE 'linhas' linhas (semente fixa).
+ 
+    O gerador pula ~10% das linhas pedidas (madrugada tem menos tráfego:
+    6 de 24 horas x 40% de descarte). Por isso pedimos um pouco a mais e
+    cortamos no número exato. As horas se repetem a cada 24 mil linhas,
+    então o corte não distorce a distribuição por hora."""
+    caminho = os.path.join(DIR_DADOS, f"base_{linhas}.log")
     if os.path.exists(caminho):
-        log(f"    (reaproveitando {nome})")
+        log(f"    (reaproveitando {os.path.basename(caminho)})")
         return caminho
-    log(f"    gerando {nome} ({linhas:,} linhas pedidas)...")
-    subprocess.run([sys.executable, GERADOR, "--lines", str(linhas),
-                    "--output", caminho, "--seed", str(SEED), "--quiet"],
-                   check=True, stdout=subprocess.DEVNULL)
-    return caminho
+    fator = 1.13
+    while True:
+        pedidas = int(linhas * fator) + 1000
+        log(f"    gerando {os.path.basename(caminho)}: {linhas:,} linhas exatas "
+            f"(~{linhas * BYTES_POR_LINHA / 1e9:.1f} GB; pode levar vários minutos)...")
+        subprocess.run([sys.executable, GERADOR, "--lines", str(pedidas),
+                        "--output", caminho, "--seed", str(SEED), "--quiet"],
+                       check=True, stdout=subprocess.DEVNULL)
+        if _corta_em(caminho, linhas) == linhas:
+            return caminho
+        fator += 0.05   # improvável: gerou menos que o necessário, tenta de novo
+ 
+ 
+def recorte(base, linhas_base, linhas):
+    """Arquivo com as primeiras 'linhas' linhas do arquivo base (mesma semente,
+    mesmos dados). Copiar é muito mais rápido que gerar de novo em Python."""
+    if linhas == linhas_base:
+        return base, False
+    caminho = os.path.join(DIR_DADOS, f"recorte_{linhas}.log")
+    if os.path.exists(caminho):
+        return caminho, True
+    log(f"    criando recorte com {linhas:,} linhas...")
+    shutil.copyfile(base, caminho)
+    _corta_em(caminho, linhas)
+    return caminho, True
+ 
+ 
+def confere_disco(args):
+    maior = max(args.lines_strong, args.lines_weak * max(args.threads_weak))
+    recorte_max = args.lines_weak * max(args.threads_weak)
+    precisa = (maior * 1.13 + (recorte_max if recorte_max != maior else 0)) * BYTES_POR_LINHA
+    livre = shutil.disk_usage(RAIZ).free
+    log(f"==> Espaço em disco: precisa de ~{precisa / 1e9:.0f} GB, livre {livre / 1e9:.0f} GB")
+    if livre < precisa:
+        sys.exit("Espaço insuficiente. Libere espaço ou reduza --lines-strong/--lines-weak.")
  
  
 def executa(cmd, cwd=None):
@@ -98,17 +158,31 @@ def confere_total(esperado, obtido, rotulo):
     if esperado is not None and obtido != esperado:
         log(f"    !! ATENÇÃO: {rotulo} contou {obtido:,} requisições, "
             f"esperado {esperado:,} (resultado inconsistente)")
-      
+
 # Ambiente (seção 2 do relatório)
 def salva_ambiente():
     caminho = os.path.join(DIR_RES, "ambiente.txt")
-    cmds = [
-        ("Sistema", ["uname", "-a"]),
-        ("CPU", ["lscpu"]),
-        ("Memória", ["free", "-h"]),
-        ("Discos", ["lsblk", "-d", "-o", "NAME,ROTA,SIZE,MODEL"]),
-        ("GCC", ["gcc", "--version"]),
-    ]
+    if platform.system() == "Darwin":   # macOS
+        cmds = [
+            ("Sistema", ["uname", "-a"]),
+            ("macOS", ["sw_vers"]),
+            ("Hardware (CPU, núcleos, RAM)", ["system_profiler", "SPHardwareDataType"]),
+            ("CPU", ["sysctl", "-n", "machdep.cpu.brand_string"]),
+            ("Núcleos físicos/lógicos e caches",
+             ["sysctl", "hw.physicalcpu", "hw.logicalcpu", "hw.memsize",
+              "hw.l1dcachesize", "hw.l2cachesize", "hw.l3cachesize",
+              "hw.perflevel0.physicalcpu", "hw.perflevel1.physicalcpu"]),
+            ("Disco", ["diskutil", "info", "/"]),
+            ("Compilador", ["gcc", "--version"]),
+        ]
+    else:                               # Linux
+        cmds = [
+            ("Sistema", ["uname", "-a"]),
+            ("CPU", ["lscpu"]),
+            ("Memória", ["free", "-h"]),
+            ("Discos", ["lsblk", "-d", "-o", "NAME,ROTA,SIZE,MODEL"]),
+            ("GCC", ["gcc", "--version"]),
+        ]
     with open(caminho, "w", encoding="utf-8") as f:
         f.write(f"Python: {platform.python_version()}\n")
         f.write(f"Núcleos lógicos (os.cpu_count): {os.cpu_count()}\n\n")
@@ -125,7 +199,8 @@ def salva_ambiente():
 # Experimentos
 def strong_scaling(args):
     log("\n==> 1. STRONG SCALING")
-    arq = gera_arquivo(args.lines_strong, f"strong_{args.lines_strong}.log")
+    base = gera_exato(args.base)
+    arq, temporario = recorte(base, args.base, args.lines_strong)
     aquece(arq)
     out = Csv("strong.csv", ["versao", "threads", "rep", "tempo_s", "requisicoes"])
  
@@ -144,26 +219,32 @@ def strong_scaling(args):
                 out.linha(versao, th, rep, t, n)
                 log(f"    {versao:<8} {th:>2} threads rep {rep}: {t:.4f} s")
     out.fecha()
+    if temporario and not args.manter_recortes:
+        os.remove(arq)
  
  
 def weak_scaling(args):
     log("\n==> 2. WEAK SCALING")
-    out = Csv("weak.csv", ["versao", "threads", "linhas_pedidas", "rep", "tempo_s", "requisicoes"])
+    base = gera_exato(args.base)
+    out = Csv("weak.csv", ["versao", "threads", "linhas", "rep", "tempo_s", "requisicoes"])
     for th in args.threads_weak:
         linhas = args.lines_weak * th
-        arq = gera_arquivo(linhas, f"weak_{linhas}.log")
+        arq, temporario = recorte(base, args.base, linhas)
         aquece(arq)
         for versao, binario in (("mutex", PAR), ("reducao", OPT)):
             for rep in range(1, args.reps + 1):
                 t, n = executa([binario, str(th), arq])
                 out.linha(versao, th, linhas, rep, t, n)
                 log(f"    {versao:<8} {th:>2} threads ({n:,} req) rep {rep}: {t:.4f} s")
+        if temporario and not args.manter_recortes:
+            os.remove(arq)   # economiza disco; recriar a partir do base é rápido
     out.fecha()
  
  
 def granularidade(args):
     log("\n==> 3. GRANULARIDADE")
-    arq = gera_arquivo(args.lines_strong, f"strong_{args.lines_strong}.log")
+    base = gera_exato(args.base)
+    arq, temporario = recorte(base, args.base, args.lines_strong)
     aquece(arq)
     th = args.threads_gran
     out = Csv("granularidade.csv", ["threads", "bloco_bytes", "rep", "tempo_s", "requisicoes"])
@@ -185,6 +266,8 @@ def granularidade(args):
             log(f"    bloco {bloco // 1024:>5} KB      rep {rep}: {t:.4f} s")
         bloco *= 2
     out.fecha()
+    if temporario and not args.manter_recortes:
+        os.remove(arq)
 
 def main():
     p = argparse.ArgumentParser(description="Experimentos do LAB1 - Analisador de Logs")
@@ -195,10 +278,12 @@ def main():
                    help="threads do weak scaling (padrão 1 2 4 8)")
     p.add_argument("--threads-gran", type=int, default=min(8, os.cpu_count() or 4),
                    help="threads do teste de granularidade (padrão: min(8, núcleos))")
-    p.add_argument("--lines-strong", type=int, default=10_000_000,
-                   help="linhas pedidas ao gerador no strong scaling (padrão 10M)")
-    p.add_argument("--lines-weak", type=int, default=2_000_000,
-                   help="linhas pedidas POR THREAD no weak scaling (padrão 2M)")
+    p.add_argument("--lines-strong", type=int, default=100_000_000,
+                   help="linhas do arquivo fixo do strong scaling (padrão 100M, como no enunciado)")
+    p.add_argument("--lines-weak", type=int, default=10_000_000,
+                   help="linhas POR THREAD no weak scaling (padrão 10M, como no enunciado)")
+    p.add_argument("--manter-recortes", action="store_true",
+                   help="não apaga os arquivos recortados depois de usar (gasta mais disco)")
     p.add_argument("--only", choices=["strong", "weak", "gran"],
                    help="roda só um experimento")
     args = p.parse_args()
@@ -206,7 +291,9 @@ def main():
     os.makedirs(DIR_DADOS, exist_ok=True)
     os.makedirs(DIR_RES, exist_ok=True)
  
+    args.base = max(args.lines_strong, args.lines_weak * max(args.threads_weak))
     compila()
+    confere_disco(args)
     log("==> Salvando especificação do ambiente")
     salva_ambiente()
  
@@ -222,4 +309,3 @@ def main():
  
 if __name__ == "__main__":
     main()
- 
