@@ -1,3 +1,4 @@
+
 import argparse
 import csv
 import os
@@ -101,9 +102,11 @@ def recorte(base, linhas_base, linhas):
  
  
 def confere_disco(args):
-    maior = max(args.lines_strong, args.lines_weak * max(args.threads_weak))
-    recorte_max = args.lines_weak * max(args.threads_weak)
-    precisa = (maior * 1.13 + (recorte_max if recorte_max != maior else 0)) * BYTES_POR_LINHA
+    # o weak scaling corta o próprio arquivo base (sem cópia), então o pico é
+    # o arquivo base (+13% durante a geração) e, se o strong for menor que o
+    # base, uma cópia para o strong/granularidade
+    extra = args.lines_strong if args.lines_strong != args.base else 0
+    precisa = (args.base * 1.13 + extra) * BYTES_POR_LINHA
     livre = shutil.disk_usage(RAIZ).free
     log(f"==> Espaço em disco: precisa de ~{precisa / 1e9:.0f} GB, livre {livre / 1e9:.0f} GB")
     if livre < precisa:
@@ -158,7 +161,7 @@ def confere_total(esperado, obtido, rotulo):
     if esperado is not None and obtido != esperado:
         log(f"    !! ATENÇÃO: {rotulo} contou {obtido:,} requisições, "
             f"esperado {esperado:,} (resultado inconsistente)")
-
+     
 # Ambiente (seção 2 do relatório)
 def salva_ambiente():
     caminho = os.path.join(DIR_RES, "ambiente.txt")
@@ -224,25 +227,32 @@ def strong_scaling(args):
  
  
 def weak_scaling(args):
-    log("\n==> 2. WEAK SCALING")
-    base = gera_exato(args.base)
+    log("\n==> 3. WEAK SCALING")
+    # Para economizar disco, NÃO copia: vai do maior para o menor cortando o
+    # próprio arquivo base (80M -> 40M -> 20M -> 10M). Por isso o weak roda por
+    # último. O arquivo é renomeado a cada corte para o nome refletir o conteúdo.
+    arq = gera_exato(args.base)
+    atual = args.base
     out = Csv("weak.csv", ["versao", "threads", "linhas", "rep", "tempo_s", "requisicoes"])
-    for th in args.threads_weak:
+    for th in sorted(args.threads_weak, reverse=True):
         linhas = args.lines_weak * th
-        arq, temporario = recorte(base, args.base, linhas)
+        if linhas < atual:
+            log(f"    cortando o arquivo base para {linhas:,} linhas...")
+            _corta_em(arq, linhas)
+            novo = os.path.join(DIR_DADOS, f"base_{linhas}.log")
+            os.replace(arq, novo)
+            arq, atual = novo, linhas
         aquece(arq)
         for versao, binario in (("mutex", PAR), ("reducao", OPT)):
             for rep in range(1, args.reps + 1):
                 t, n = executa([binario, str(th), arq])
                 out.linha(versao, th, linhas, rep, t, n)
                 log(f"    {versao:<8} {th:>2} threads ({n:,} req) rep {rep}: {t:.4f} s")
-        if temporario and not args.manter_recortes:
-            os.remove(arq)   # economiza disco; recriar a partir do base é rápido
     out.fecha()
  
  
 def granularidade(args):
-    log("\n==> 3. GRANULARIDADE")
+    log("\n==> 2. GRANULARIDADE")
     base = gera_exato(args.base)
     arq, temporario = recorte(base, args.base, args.lines_strong)
     aquece(arq)
@@ -299,13 +309,15 @@ def main():
  
     if args.only in (None, "strong"):
         strong_scaling(args)
-    if args.only in (None, "weak"):
-        weak_scaling(args)
     if args.only in (None, "gran"):
         granularidade(args)
+    if args.only in (None, "weak"):
+        weak_scaling(args)   # por último: corta o arquivo base
+ 
  
     log("\nPronto. Agora rode:  python3 plot_graphs.py")
  
  
 if __name__ == "__main__":
     main()
+ 
