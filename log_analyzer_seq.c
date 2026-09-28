@@ -3,6 +3,8 @@
 #include <string.h>
 #include <time.h>
 
+#define _POSIX_C_SOURCE 200809L // clock_gettime
+
 
 //Declarações
 typedef struct{
@@ -43,6 +45,7 @@ char ip[50];
 char metodo[10];
 int bytes;
 int status;
+int hora;
 char url[1000];
 
 
@@ -97,9 +100,14 @@ void AnalisaArquivo(){
     }
         //Lançar o arquivo no buffer
     while (fgets(arquivo, sizeof(arquivo), p) != NULL){
-        sscanf(arquivo, "%s - - %*s %*s \"%s %s %*[^\"]\" %d %d", ip, metodo, url, &status, &bytes);
+        //Lê também a hora: "[15/Sep/2025:HH:..." -> pula até o ':' e lê HH
+        sscanf(arquivo, "%s - - [%*[^:]:%d:%*s %*s \"%s %s %*[^\"]\" %d %d", ip, &hora, metodo, url, &status, &bytes);
         //Contador para número de solicitações
         stats.total_requests += 1;
+        //Contador por hora (0-23)
+        if (hora >= 0 && hora < 24){
+            stats.requests_per_hour[hora]++;
+        }
         //Contador de método
         if (strcmp(metodo,"GET")==0){
             stats.contador_http[0]++;
@@ -186,10 +194,13 @@ void OrdenaIp() {
 
 
 int main() {
-    clock_t tempo_inicio = clock();
+    //Tempo de parede (mesma medição das versões paralelas)
+    struct timespec tempo_inicio, tempo_fim;
+    clock_gettime(CLOCK_MONOTONIC, &tempo_inicio);
     AnalisaArquivo();
-    clock_t tempo_fim = clock();
-    double tempo_execucao = (double)(tempo_fim - tempo_inicio) / CLOCKS_PER_SEC;
+    clock_gettime(CLOCK_MONOTONIC, &tempo_fim);
+    double tempo_execucao = (tempo_fim.tv_sec - tempo_inicio.tv_sec) +
+                            (tempo_fim.tv_nsec - tempo_inicio.tv_nsec) / 1e9;
     stats.avg_bytes = (double)stats.total_bytes/stats.total_200;
     stats.error_rate = ((double)stats.total_404/stats.total_requests) * 100.0;
 
@@ -202,7 +213,7 @@ int main() {
     printf(" \n");
     printf("ARQUIVO: access_log_large.txt\n");
     printf("THREADS: 1\n");
-    printf("TEMPO DE EXECUÇÃO: %.2f segundos\n", tempo_execucao);
+    printf("TEMPO DE EXECUÇÃO: %.6f segundos\n", tempo_execucao);
     printf(" \n");
     
     
@@ -236,6 +247,15 @@ int main() {
     
     for (int i = 0; i < 10 && i < ips_unicos; i++) {
         printf("%d. %s - %d  requisições\n", i + 1, count_ip[i].string_ip, count_ip[i].contador_ip);
+    }
+    printf(" \n");
+
+
+    printf("=============================================================\n");
+    printf("DISTRIBUIÇÃO POR HORA\n");
+    printf("=============================================================\n");
+    for (int h = 0; h < 24; h++) {
+        printf("%02dh  %d (%.2f%%)\n", h, stats.requests_per_hour[h], (double)stats.requests_per_hour[h] / stats.total_requests * 100.0);
     }
     printf(" \n");
 
