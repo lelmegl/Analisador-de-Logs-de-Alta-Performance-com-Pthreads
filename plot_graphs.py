@@ -1,5 +1,6 @@
 import csv
 import os
+import sys
 import statistics as st
 from collections import defaultdict
  
@@ -8,8 +9,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
  
 RAIZ = os.path.dirname(os.path.abspath(__file__))
-DIR_RES = os.path.join(RAIZ, "resultados")
-DIR_GRAF = os.path.join(RAIZ, "graficos")
+# Uso: python3 plot_graphs.py [pasta_resultados] [pasta_graficos]
+#   ex: python3 plot_graphs.py resultados_10M graficos_10M
+DIR_RES = os.path.join(RAIZ, sys.argv[1] if len(sys.argv) > 1 else "resultados")
+DIR_GRAF = os.path.join(RAIZ, sys.argv[2] if len(sys.argv) > 2 else "graficos")
  
 # Paleta categórica (ordem fixa, validada para daltonismo) + tons neutros
 COR = {"reducao": "#2a78d6", "mutex": "#eb6834", "seq": "#1baf7a"}
@@ -76,6 +79,10 @@ def rotulo_final(ax, x, y, texto, cor):
                 va="center", fontsize=9, color=TEXTO)
     ax.plot([x], [y], "o", color=cor, markeredgecolor="white", markeredgewidth=2)
 
+def rotulo_bloco(b):
+    """1024 -> '1 KB', 2097152 -> '2 MB'"""
+    return f"{b // 1024} KB" if b < 1024 * 1024 else f"{b // (1024 * 1024)} MB"
+
 # Strong scaling: gráficos 1, 2, 3 e tabelas 1 e 4
 def strong(tabelas):
     dados = le_csv("strong.csv")
@@ -129,7 +136,7 @@ def strong(tabelas):
     ax.set_ylabel("Eficiência (Speedup / N) [%]")
     ax.set_title("Eficiência vs. número de threads")
     ax.set_ylim(0, max(110, max(100 * r[4] for v in res for r in res[v]) * 1.1))
-    ax.legend(loc="upper right")
+    ax.legend(loc="lower left")
     salva(fig, "2_eficiencia.png")
  
     # Gráfico 3: Mutex global vs Redução local (tempo)
@@ -194,7 +201,7 @@ def weak(tabelas):
         for (n, m, d), x in zip(pts, xs):
             linhas_tab.append((n, x, NOME[v], m, d, t1 / m))
             if v == "reducao":
-                ax.annotate(f"{n}T", (x, m), xytext=(0, 12), textcoords="offset points",
+                ax.annotate(f"{n}T", (x, m), xytext=(0, -16), textcoords="offset points",
                             ha="center", fontsize=8.5, color=TEXTO_2)
     ax.set_xscale("log", base=2)
     ax.set_xticks([req[n] for n in threads], [f"{req[n] / 1e6:.1f}M" for n in threads])
@@ -235,18 +242,18 @@ def granularidade(tabelas):
                label=f"Estático, 1 bloco/thread ({est_m:.3f} s)")
     ax.plot([melhor[0] / 1024], [melhor[1]], "o", markersize=13, markerfacecolor="none",
             markeredgecolor=TEXTO, markeredgewidth=1.5)
-    ax.annotate(f"Ótimo: {melhor[0] // 1024} KB\n{melhor[1]:.3f} s",
+    ax.annotate(f"Melhor bloco: {rotulo_bloco(melhor[0])}\n{melhor[1]:.3f} s",
                 (melhor[0] / 1024, melhor[1]), xytext=(0, -30), textcoords="offset points",
                 ha="center", va="top", fontsize=9, color=TEXTO)
     ax.set_xscale("log", base=2)
-    ax.set_xticks(xs, [f"{int(x)}" if x < 1024 else "1024" for x in xs])
+    ax.set_xticks(xs, [rotulo_bloco(b) for b, _, _ in pts], rotation=45)
     ax.minorticks_off()
-    ax.set_xlabel("Tamanho do bloco [KB]")
+    ax.set_xlabel("Tamanho do bloco")
     ax.set_ylabel("Tempo de execução [s]")
     ax.set_title(f"Granularidade: tempo vs. tamanho do bloco ({th} threads)")
     lo = min(min(m for _, m, _ in pts), est_m)
     ax.set_ylim(bottom=lo * 0.8 - 0.02 * lo)
-    ax.legend(loc="upper right")
+    ax.legend(loc="best")
     salva(fig, "4_granularidade.png")
  
     t3 = [f"### Tabela 3 - Granularidade ({th} threads, redução local)\n",
@@ -254,8 +261,8 @@ def granularidade(tabelas):
           "|---:|---:|---:|---:|",
           f"| estático (1/thread) | {est_m:.4f} | {est_d:.4f} | - |"]
     for b, m, d in pts:
-        marca = " **(ótimo)**" if b == melhor[0] else ""
-        t3.append(f"| {b // 1024} KB{marca} | {m:.4f} | {d:.4f} | {100 * (m - est_m) / est_m:+.1f}% |")
+        marca = " **(melhor dinâmico)**" if b == melhor[0] else ""
+        t3.append(f"| {rotulo_bloco(b)}{marca} | {m:.4f} | {d:.4f} | {100 * (m - est_m) / est_m:+.1f}% |")
     tabelas.append("\n".join(t3))
 
 def main():
