@@ -1,0 +1,118 @@
+    15.02%  [k] __pv_queued_spin_lock_slowpath             -      -            
+             --14.96%--_raw_spin_lock
+                       |          futex_wake
+                       |          do_futex
+                       |          __x64_sys_futex
+                       |          __lll_lock_wake (inlined)
+                       |--2.04%--futex_wake
+                       |          do_futex
+                       |          __x64_sys_futex
+                       |          __lll_lock_wake (inlined)
+                        --1.14%--futex_q_lock
+                                  futex_wait_setup
+                                  __futex_wait
+                                  futex_wait
+                                  do_futex
+                                  __x64_sys_futex
+                                  futex_wait (inlined)
+                                  __lll_lock_wait (inlined)
+            |--8.85%--__lll_lock_wake (inlined)
+             --5.33%--futex_wait (inlined)
+                       __lll_lock_wait (inlined)
+     3.58%  [.] pthread_mutex_lock@@GLIBC_2.2.5            -      -            
+            |--1.97%--___pthread_mutex_lock (inlined)
+             --1.62%--lll_mutex_lock_optimized (inlined)
+                       ___pthread_mutex_lock (inlined)
+     2.50%  [.] pthread_mutex_unlock@@GLIBC_2.2.5          -      -            
+             --1.96%--lll_mutex_unlock_optimized (inlined)
+                       __pthread_mutex_unlock_usercnt (inlined)
+                       ___pthread_mutex_unlock (inlined)
+            |--0.92%--__lll_lock_wake (inlined)
+             --0.51%--futex_wait (inlined)
+                       __lll_lock_wait (inlined)
+                       |--1.12%--__lll_lock_wake (inlined)
+                        --0.65%--futex_wait (inlined)
+                                  __lll_lock_wait (inlined)
+     1.83%  [.] __GI___lll_lock_wait                       -      -            
+            |--1.24%--__lll_lock_wait (inlined)
+             --0.59%--futex_wait (inlined)
+                       __lll_lock_wait (inlined)
+            |--1.18%--__lll_lock_wake (inlined)
+             --0.59%--futex_wait (inlined)
+                       __lll_lock_wait (inlined)
+     1.51%  [k] futex_wake                                 -      -            
+             --1.32%--do_futex
+                       __x64_sys_futex
+                       __lll_lock_wake (inlined)
+     1.50%  [k] futex_hash                                 -      -            
+            |--0.92%--futex_wake
+            |          do_futex
+            |          __x64_sys_futex
+            |          __lll_lock_wake (inlined)
+             --0.51%--futex_wait_setup
+                       __futex_wait
+                       futex_wait
+                       do_futex
+                       __x64_sys_futex
+                       futex_wait (inlined)
+                       __lll_lock_wait (inlined)
+     1.42%  [k] __futex_hash                               -      -            
+             --0.72%--futex_hash
+     1.32%  [k] futex_wait_setup                           -      -            
+             --1.30%--__futex_wait
+                       futex_wait
+                       do_futex
+                       __x64_sys_futex
+                       futex_wait (inlined)
+                       __lll_lock_wait (inlined)
+             --0.77%--futex_wake
+                       do_futex
+                       __x64_sys_futex
+                       __lll_lock_wake (inlined)
+     0.90%  [k] _raw_spin_lock                             -      -            
+     0.76%  [k] do_futex                                   -      -            
+                                  futex_do_wait
+                                  __futex_wait
+                                  futex_wait
+                                  do_futex
+                                  __x64_sys_futex
+                                  futex_wait (inlined)
+                                  __lll_lock_wait (inlined)
+     0.71%  [k] get_futex_key                              -      -            
+     0.70%  [k] __futex_wait                               -      -            
+             --0.66%--futex_wait
+                       do_futex
+                       __x64_sys_futex
+                       futex_wait (inlined)
+                       __lll_lock_wait (inlined)
+     0.65%  [k] futex_q_lock                               -      -            
+             --0.55%--futex_wait_setup
+                       __futex_wait
+                       futex_wait
+                       do_futex
+                       __x64_sys_futex
+                       futex_wait (inlined)
+                       __lll_lock_wait (inlined)
+     0.60%  [k] __x64_sys_futex                            -      -            
+     0.60%  [k] futex_wait                                 -      -            
+     0.58%  [k] futex_ref_get                              -      -            
+     0.40%  [k] futex_hash_put                             -      -            
+     0.39%  [k] futex_q_unlock                             -      -            
+     0.35%  [.] __GI___lll_lock_wake                       -      -            
+     0.34%  [k] __raw_callee_save___pv_queued_spin_unlock  -      -            
+     0.13%  [k] _raw_spin_unlock                           -      -            
+     0.08%  [k] futex_wake_mark                            -      -            
+     0.07%  [.] pthread_mutex_lock@plt                     -      -            
+     0.04%  [.] pthread_mutex_unlock@plt                   -      -            
+     0.04%  [k] __futex_unqueue                            -      -            
+     0.04%  [k] futex_unqueue                              -      -            
+     0.04%  [k] futex_do_wait                              -      -            
+     0.02%  [k] _raw_spin_lock_irqsave                     -      -            
+     0.01%  [k] _raw_spin_unlock_irqrestore                -      -            
+     0.01%  [k] mutex_lock                                 -      -            
+     0.01%  [k] futex_setup_timer                          -      -            
+     0.01%  [k] mutex_unlock                               -      -            
+     0.00%  [k] raw_spin_rq_lock_nested                    -      -            
+     0.00%  [k] __futex_queue                              -      -            
+     0.00%  [k] raw_spin_rq_unlock                         -      -            
+     0.00%  [k] _raw_spin_lock_irq                         -      -            

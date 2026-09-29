@@ -5,3 +5,7 @@ log_analyzer_par_optimized
 *.exe
 dados/
 *.log
+FlameGraph/
+profiling/*.data
+profiling/*_prof
+profiling/cg_*.out

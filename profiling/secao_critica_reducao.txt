@@ -1,0 +1,4 @@
+     0.06%  [k] mutex_lock                            -      -            
+     0.04%  [k] mutex_unlock                          -      -            
+     0.00%  [k] __pv_queued_spin_lock_slowpath        -      -            
+     0.00%  [k] _raw_spin_lock_irq                    -      -            

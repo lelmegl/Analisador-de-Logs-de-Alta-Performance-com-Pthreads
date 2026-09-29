@@ -1,0 +1,22 @@
+==8211== Cachegrind, a high-precision tracing profiler
+==8211== Copyright (C) 2002-2024, and GNU GPL'd, by Nicholas Nethercote et al.
+==8211== Using Valgrind-3.26.0 and LibVEX; rerun with -h for copyright info
+==8211== Command: ./log_analyzer_seq
+==8211== 
+--8211-- warning: L3 cache found, using its data for the LL simulation.
+==8211== 
+==8211== I refs:        3,023,302,251
+==8211== I1  misses:            1,884
+==8211== LLi misses:            1,837
+==8211== I1  miss rate:          0.00%
+==8211== LLi miss rate:          0.00%
+==8211== 
+==8211== D refs:        1,180,677,066  (787,063,993 rd   + 393,613,073 wr)
+==8211== D1  misses:            2,866  (      2,296 rd   +         570 wr)
+==8211== LLd misses:            2,354  (      1,885 rd   +         469 wr)
+==8211== D1  miss rate:           0.0% (        0.0%     +         0.0%  )
+==8211== LLd miss rate:           0.0% (        0.0%     +         0.0%  )
+==8211== 
+==8211== LL refs:               4,750  (      4,180 rd   +         570 wr)
+==8211== LL misses:             4,191  (      3,722 rd   +         469 wr)
+==8211== LL miss rate:            0.0% (        0.0%     +         0.0%  )
