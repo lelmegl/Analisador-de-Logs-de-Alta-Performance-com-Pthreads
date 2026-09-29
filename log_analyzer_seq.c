@@ -125,7 +125,7 @@ void AnalisaArquivo(){
             stats.contador_http[4]++;
         }
         VerificaStatus(status);
-        
+
         //Verifica se a url já foi usada
         int encontrada = 0;
         for(int i =0; i<urls_unicas; i++){
@@ -135,7 +135,7 @@ void AnalisaArquivo(){
                 break;
             }
         }
-        
+
         //Se ainda não foi usada, adiciona ao vetor e inicia o contador
         if (encontrada == 0 && urls_unicas <1000){
             strcpy(count[urls_unicas].string_url, url);
@@ -165,11 +165,15 @@ void AnalisaArquivo(){
 }
 
 
+//Ordena por número de acessos (decrescente). Empate: ordem alfabética,
+//igual às versões paralelas, para a saída ser a mesma
 void OrdenaUrl(){
     UrlCount temp;
     for (int i=0; i<urls_unicas; i++ ){
         for(int j=i+1; j< urls_unicas; j++){
-            if (count[i].contador_url < count[j].contador_url){
+            if (count[i].contador_url < count[j].contador_url ||
+                (count[i].contador_url == count[j].contador_url &&
+                 strcmp(count[i].string_url, count[j].string_url) > 0)){
                 temp = count[i];
                 count[i] = count[j];
                 count [j] = temp;
@@ -182,7 +186,9 @@ void OrdenaIp() {
     IpCount temp;
     for (int i = 0; i < ips_unicos; i++) {
         for (int j = i + 1; j < ips_unicos; j++) {
-            if (count_ip[i].contador_ip < count_ip[j].contador_ip) {
+            if (count_ip[i].contador_ip < count_ip[j].contador_ip ||
+                (count_ip[i].contador_ip == count_ip[j].contador_ip &&
+                 strcmp(count_ip[i].string_ip, count_ip[j].string_ip) > 0)) {
                 temp = count_ip[i];
                 count_ip[i] = count_ip[j];
                 count_ip[j] = temp;
@@ -190,6 +196,28 @@ void OrdenaIp() {
         }
     }
 }
+
+
+//Formata número com separador de milhar: 1234567 -> "1,234,567"
+char *FormataMilhar(long long v, char *buf){
+    char tmp[32];
+    snprintf(tmp, sizeof(tmp), "%lld", v);
+    int len = (int)strlen(tmp), j = 0;
+    for (int i = 0; i < len; i++){
+        buf[j++] = tmp[i];
+        if ((len - i - 1) % 3 == 0 && i != len - 1) buf[j++] = ',';
+    }
+    buf[j] = '\0';
+    return buf;
+}
+
+//Porcentagem em relação ao total de requisições
+double Pct(long long parte){
+    return stats.total_requests ? 100.0 * parte / stats.total_requests : 0.0;
+}
+
+#define LINHA_DUPLA   "============================================================\n"
+#define LINHA_SIMPLES "------------------------------------------------------------\n"
 
 
 
@@ -201,91 +229,66 @@ int main() {
     clock_gettime(CLOCK_MONOTONIC, &tempo_fim);
     double tempo_execucao = (tempo_fim.tv_sec - tempo_inicio.tv_sec) +
                             (tempo_fim.tv_nsec - tempo_inicio.tv_nsec) / 1e9;
-    stats.avg_bytes = (double)stats.total_bytes/stats.total_200;
-    stats.error_rate = ((double)stats.total_404/stats.total_requests) * 100.0;
+    stats.avg_bytes = stats.total_200 ? (double)stats.total_bytes/stats.total_200 : 0.0;
+    stats.error_rate = Pct(stats.total_404);
 
+    char b[32];
 
-
-
-    printf("=============================================================\n");
-    printf("ANALISADOR DE LOGS - RELATÓRIO COMPLETO\n");
-    printf("=============================================================\n");
-    printf(" \n");
+    //Relatório no formato do apêndice do enunciado (mesmo das versões paralelas)
+    printf(LINHA_DUPLA "ANALISADOR DE LOGS - RELATÓRIO COMPLETO\n" LINHA_DUPLA);
     printf("ARQUIVO: access_log_large.txt\n");
     printf("THREADS: 1\n");
-    printf("TEMPO DE EXECUÇÃO: %.6f segundos\n", tempo_execucao);
-    printf(" \n");
-    
-    
-    
-    printf("=============================================================\n");
-    printf("ESTATÍSTICAS BÁSICAS\n");
-    printf("=============================================================\n");
+    printf("VERSÃO: sequencial\n");
+    printf("TEMPO DE EXECUÇÃO: %.4f segundos\n", tempo_execucao);
 
-    printf("Total de Requisições:             %lld\n", stats.total_requests);
-    printf("Requisições 200 (OK):             %lld\n", stats.total_200);
-    printf("Requisições 404 (Not Found):      %lld\n", stats.total_404);
-    printf("Total de Bytes (Requisições 200): %lld\n", stats.total_bytes);
-    printf("Média de Bytes/Req:               %.0f bytes\n", stats.avg_bytes);
-    printf("Taxa de Erro Geral:               %.2f%%\n", stats.error_rate);
-    printf(" \n");
-    printf("=============================================================\n");
-    printf("TOP 10 URLs MAIS ACESSADAS\n");
-    printf("=============================================================\n");
+    printf(LINHA_SIMPLES "ESTATÍSTICAS BÁSICAS\n" LINHA_SIMPLES);
+    printf("Total de Requisições:         %s\n", FormataMilhar(stats.total_requests, b));
+    printf("Requisições 200 (OK):         %s (%.2f%%)\n", FormataMilhar(stats.total_200, b), Pct(stats.total_200));
+    printf("Requisições 404 (Not Found):  %s (%.2f%%)\n", FormataMilhar(stats.total_404, b), Pct(stats.total_404));
+    printf("Total de Bytes (200):         %s\n", FormataMilhar(stats.total_bytes, b));
+    printf("Média de Bytes/Req (200):     %s bytes\n", FormataMilhar((long long)(stats.avg_bytes + 0.5), b));
+    printf("Taxa de Erro Geral:           %.2f%%\n", stats.error_rate);
 
+    printf(LINHA_SIMPLES "TOP 10 URLs MAIS ACESSADAS\n" LINHA_SIMPLES);
     OrdenaUrl();
     for(int i = 0; i < 10 && i < urls_unicas; i++) {
-        printf("%d. %s - %d acessos\n", i + 1, count[i].string_url, count[i].contador_url);
+        printf("%2d. %-35s %12s acessos\n", i + 1, count[i].string_url,
+               FormataMilhar(count[i].contador_url, b));
     }
 
-
-    printf("=============================================================\n");
-    printf("TOP 10 IPs  MAIS ATIVOS\n");
-    printf("=============================================================\n");
-    
+    printf(LINHA_SIMPLES "TOP 10 IPs MAIS ATIVOS\n" LINHA_SIMPLES);
     OrdenaIp();
-    
     for (int i = 0; i < 10 && i < ips_unicos; i++) {
-        printf("%d. %s - %d  requisições\n", i + 1, count_ip[i].string_ip, count_ip[i].contador_ip);
+        printf("%2d. %-35s %12s requisições\n", i + 1, count_ip[i].string_ip,
+               FormataMilhar(count_ip[i].contador_ip, b));
     }
-    printf(" \n");
 
-
-    printf("=============================================================\n");
-    printf("DISTRIBUIÇÃO POR HORA\n");
-    printf("=============================================================\n");
+    printf(LINHA_SIMPLES "DISTRIBUIÇÃO POR HORA\n" LINHA_SIMPLES);
     for (int h = 0; h < 24; h++) {
-        printf("%02dh  %d (%.2f%%)\n", h, stats.requests_per_hour[h], (double)stats.requests_per_hour[h] / stats.total_requests * 100.0);
+        printf("%02dh  %12s (%5.2f%%)\n", h, FormataMilhar(stats.requests_per_hour[h], b),
+               Pct(stats.requests_per_hour[h]));
     }
-    printf(" \n");
 
+    //Mesma ordem das versões paralelas
+    const char *nomes_status[10] = {"200 OK", "301 Moved", "302 Found", "400 Bad Req",
+        "403 Forbidden", "404 Not Found", "500 Internal", "502 Bad Gateway", "503 Unavail", "Outros"};
+    long long valores_status[10] = {stats.total_200, stats.status_dist[0], stats.status_dist[1],
+        stats.status_dist[2], stats.status_dist[3], stats.total_404, stats.status_dist[4],
+        stats.status_dist[5], stats.status_dist[6], stats.status_dist[7]};
+    printf(LINHA_SIMPLES "DISTRIBUIÇÃO DE CÓDIGOS DE STATUS\n" LINHA_SIMPLES);
+    for (int i = 0; i < 10; i++) {
+        printf("%-16s %12s (%5.2f%%)\n", nomes_status[i], FormataMilhar(valores_status[i], b),
+               Pct(valores_status[i]));
+    }
 
-    printf("=============================================================\n");
-    printf("DISTRIBUIÇÃO DE CÓDIGOS DE STATUS\n");
-    printf("=============================================================\n");
-    
-    printf("200 OK:               %lld (%.2f%%)\n", stats.total_200, (double)stats.total_200 / stats.total_requests * 100.0);
-    printf("301 Moved:             %lld (%.2f%%)\n", stats.status_dist[0], (double)stats.status_dist[0] / stats.total_requests * 100.0);
-    printf("302 Found:             %lld (%.2f%%)\n", stats.status_dist[1], (double)stats.status_dist[1] / stats.total_requests * 100.0);
-    printf("400 Bad Req:           %lld (%.2f%%)\n", stats.status_dist[2], (double)stats.status_dist[2] / stats.total_requests * 100.0);
-    printf("403 Forbidden:         %lld (%.2f%%)\n", stats.status_dist[3], (double)stats.status_dist[3] / stats.total_requests * 100.0);
-    printf("404 Not Found:         %lld (%.2f%%)\n", stats.total_404, (double)stats.total_404 / stats.total_requests * 100.0);
-    printf("500 Internal:          %lld (%.2f%%)\n", stats.status_dist[4], (double)stats.status_dist[4] / stats.total_requests * 100.0);
-    printf("502 Bad Gateway:       %lld (%.2f%%)\n", stats.status_dist[5], (double)stats.status_dist[5] / stats.total_requests * 100.0);
-    printf("503 Unavail:            %lld (%.2f%%)\n", stats.status_dist[6], (double)stats.status_dist[6] / stats.total_requests * 100.0);
-    printf("Outros:                 %lld (%.2f%%)\n", stats.status_dist[7], (double)stats.status_dist[7] / stats.total_requests * 100.0);
-    printf(" \n");
+    const char *nomes_metodos[5] = {"GET", "POST", "PUT", "DELETE", "OUTROS"};
+    printf(LINHA_SIMPLES "ANÁLISE DE MÉTODOS HTTP\n" LINHA_SIMPLES);
+    for (int i = 0; i < 5; i++) {
+        printf("%-16s %12s (%5.2f%%)\n", nomes_metodos[i], FormataMilhar(stats.contador_http[i], b),
+               Pct(stats.contador_http[i]));
+    }
 
-
-    printf("=============================================================\n");
-    printf("ANÁLISE DE MÉTODOS HTTP\n");
-    printf("=============================================================\n");
-    printf("GET:       %lld (%.2f%%)\n", stats.contador_http[0], (double)stats.contador_http[0] / stats.total_requests * 100.0);
-    printf("POST:      %lld (%.2f%%)\n", stats.contador_http[1], (double)stats.contador_http[1] / stats.total_requests * 100.0);
-    printf("PUT:       %lld (%.2f%%)\n", stats.contador_http[2], (double)stats.contador_http[2] / stats.total_requests * 100.0);
-    printf("DELETE:    %lld (%.2f%%)\n", stats.contador_http[3], (double)stats.contador_http[3] / stats.total_requests * 100.0);
-    printf("OUTROS:    %lld (%.2f%%)\n", stats.contador_http[4], (double)stats.contador_http[4] / stats.total_requests * 100.0);
-    printf(" \n");
+    printf(LINHA_DUPLA "FIM DO RELATÓRIO\n" LINHA_DUPLA);
 
     return 0;
 }
