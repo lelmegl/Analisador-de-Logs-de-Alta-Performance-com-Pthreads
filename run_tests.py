@@ -268,7 +268,7 @@ def granularidade(args):
         log(f"    estático             rep {rep}: {t:.4f} s")
  
     bloco = 1024
-    while bloco <= 1024 * 1024:
+    while bloco <= 16 * 1024 * 1024:
         for rep in range(1, args.reps + 1):
             t, n = executa([OPT, str(th), arq, str(bloco)])
             confere_total(esperado, n, f"bloco {bloco}")
